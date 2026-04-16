@@ -1,100 +1,51 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
-const initialEvents = [
-  {
-    id: 1,
-    title: 'Moonlight Stargazing',
-    host: 'Talia',
-    location: 'Hidden Lakeview Spot',
-    date: 'April 18, 2026',
-    time: '8:00 PM',
-    duration: '2.5 hours',
-    description: 'Quiet stargazing after dark. Bring a blanket, warm drink, and an open mind.',
-    tags: ['Stargazing', 'Small group', 'Nature'],
-    capacity: 20,
-    spotsLeft: 7,
-    reserved: false,
-  },
-  {
-    id: 2,
-    title: 'Sunset Bonfire Beats',
-    host: 'Aria',
-    location: 'Pine Cove Gathering Point',
-    date: 'April 25, 2026',
-    time: '6:00 PM',
-    duration: '3 hours',
-    description: 'Bonfire, acoustic songs, and new people. Good vibes only.',
-    tags: ['Bonfire', 'Music', 'Outdoor'],
-    capacity: 15,
-    spotsLeft: 5,
-    reserved: false,
-  },
-  {
-    id: 3,
-    title: 'River Trail Day Trip',
-    host: 'Jay',
-    location: 'North River Trailhead',
-    date: 'May 3, 2026',
-    time: '10:00 AM',
-    duration: '5 hours',
-    description: 'A day hike with scenic views, picnic snacks, and easy-going company.',
-    tags: ['Day trip', 'Hiking', 'Group'],
-    capacity: 18,
-    spotsLeft: 11,
-    reserved: false,
-  },
-  {
-    id: 4,
-    title: 'Acoustic Park Jam',
-    host: 'Mina',
-    location: 'Riverside Greenway',
-    date: 'May 8, 2026',
-    time: '4:30 PM',
-    duration: '2 hours',
-    description: 'Casual jam session for listeners and players alike. Register to reserve your spot.',
-    tags: ['Music', 'Gathering', 'Free entry'],
-    capacity: 20,
-    spotsLeft: 12,
-    reserved: false,
-  },
-]
+
+const API_BASE = 'http://localhost:5000/api'
 
 function EventCard({ event, onReserve }) {
+  const tags = Array.isArray(event.tags) && event.tags.length > 0 ? event.tags : ['General']
+  const hostName = event.host?.name || 'Unknown host'
+  const eventDate = event.date ? new Date(event.date).toLocaleDateString() : 'TBA'
+  const isReserved = Array.isArray(event.reservations)
+    ? event.reservations.some((res) => String(res.user) === 'currentUserId')
+    : false
+
   return (
     <article className="event-card">
       <div className="event-top">
         <div>
-          <p className="event-type">{event.tags[0]}</p>
-          <h2>{event.title}</h2>
+          <p className="event-type">{tags[0]}</p>
+          <h2>{event.title || 'Untitled event'}</h2>
         </div>
-        <span className="badge">{event.spotsLeft} spots left</span>
+        <span className="badge">{event.spotsLeft ?? '0'} spots left</span>
       </div>
 
-      <p className="event-description">{event.description}</p>
+      <p className="event-description">{event.description || 'No description available.'}</p>
 
       <div className="event-details">
         <div>
           <strong>Host</strong>
-          <p>{event.host}</p>
+          <p>{hostName}</p>
         </div>
         <div>
           <strong>Date</strong>
-          <p>{event.date}</p>
+          <p>{eventDate}</p>
         </div>
         <div>
           <strong>Time</strong>
-          <p>{event.time}</p>
+          <p>{event.time || 'TBA'}</p>
         </div>
         <div>
           <strong>Location</strong>
-          <p>{event.location}</p>
+          <p>{event.location || 'TBA'}</p>
         </div>
       </div>
 
       <div className="event-meta">
-        <p>{event.duration}</p>
+        <p>{event.duration || 'Duration not set'}</p>
         <div className="tag-list">
-          {event.tags.map((tag) => (
+          {tags.map((tag) => (
             <span key={tag} className="tag">
               {tag}
             </span>
@@ -103,20 +54,84 @@ function EventCard({ event, onReserve }) {
       </div>
 
       <button className="reserve-btn" onClick={onReserve}>
-        {event.reserved ? 'Reserved ✓' : 'Reserve spot'}
+        {isReserved ? 'Reserved ✓' : 'Reserve spot'}
       </button>
     </article>
   )
 }
 
 function EventList() {
-  const [events, setEvents] = useState(initialEvents)
+  const [events, setEvents] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-  function handleReserve(id) {
-    setEvents((current) =>
-      current.map((event) =>
-        event.id === id ? { ...event, reserved: !event.reserved } : event
+  useEffect(() => {
+    fetchEvents()
+  }, [])
+
+  async function fetchEvents() {
+    try {
+      const response = await fetch(`${API_BASE}/events`)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({})); 
+        console.error('Server Error Detail:', errorData);
+        throw new Error(`Server error: ${response.status}`);
+      }
+      const data = await response.json()
+      setEvents(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleReserve(eventId) {
+    try {
+      // For now, use a placeholder user ID
+      const userId = '507f1f77bcf86cd799439011' // Replace with actual user ID
+
+      const response = await fetch(`${API_BASE}/events/${eventId}/reserve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to reserve spot')
+      }
+
+      const updatedEvent = await response.json()
+      setEvents(current =>
+        current.map(event =>
+          event._id === eventId ? updatedEvent : event
+        )
       )
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  if (loading) {
+    return (
+      <main className="app-shell">
+        <div style={{ textAlign: 'center', padding: '50px' }}>
+          <p>Loading events...</p>
+        </div>
+      </main>
+    )
+  }
+
+  if (error) {
+    return (
+      <main className="app-shell">
+        <div style={{ textAlign: 'center', padding: '50px' }}>
+          <p>Error: {error}</p>
+          <button onClick={fetchEvents}>Try again</button>
+        </div>
+      </main>
     )
   }
 
@@ -140,9 +155,15 @@ function EventList() {
       </section>
 
       <section className="event-grid">
-        {events.map((event) => (
-          <EventCard key={event.id} event={event} onReserve={() => handleReserve(event.id)} />
-        ))}
+        {events.length === 0 ? (
+          <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '50px' }}>
+            <p>No events found. Check back later!</p>
+          </div>
+        ) : (
+          events.map((event) => (
+            <EventCard key={event._id} event={event} onReserve={() => handleReserve(event._id)} />
+          ))
+        )}
       </section>
     </main>
   )
